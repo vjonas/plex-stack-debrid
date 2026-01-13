@@ -1,6 +1,6 @@
 # Plex
 
-Mac mini home server running a VPN-isolated media automation stack using Docker (Colima).
+Mac mini home server running a media automation stack using Docker (Colima) with Debrid-Link cloud downloading.
 
 This document covers:
 
@@ -18,7 +18,8 @@ Once setup is complete, **all normal usage happens via Overseerr on a phone**.
 
 - macOS (Apple Silicon recommended)
 - External drive for media (APFS or HFS+ recommended)
-- NordVPN subscription (service credentials)
+- SMB network share for debrid downloads
+- Debrid-Link account with API access
 - Homebrew installed
 
 ---
@@ -43,6 +44,44 @@ docker info
 
 ---
 
+### SMB Share Setup
+
+Mount the SMB share where Debrid-Link downloads will be stored:
+
+```bash
+# Create mount point
+sudo mkdir -p /Volumes/debrid-downloads
+
+# Mount SMB share (replace IP and credentials)
+sudo mount -t smbfs '//username:password@192.168.1.1/H' /Volumes/debrid-downloads
+
+# Or with SMB version specified:
+sudo mount -t smbfs -o vers=2.0 '//username:password@192.168.1.1/H' /Volumes/debrid-downloads
+```
+
+For persistent mounting, create `/etc/auto_smb`:
+
+```bash
+# /etc/auto_smb
+debrid-downloads -fstype=smbfs,soft ://username:password@192.168.1.1/H
+```
+
+Then add to `/etc/auto_master`:
+
+```
+/Volumes auto_smb
+```
+
+And reload automount:
+
+```bash
+sudo automount -vc
+```
+
+Alternatively, connect via Finder (Cmd+K → `smb://192.168.1.1/H`) and it will mount at `/Volumes/H`.
+
+---
+
 ### Media Folder Setup
 
 Create media folders on the external drive:
@@ -50,11 +89,7 @@ Create media folders on the external drive:
 ```
 /Volumes/storage/Media
 ├── Movies
-├── TV Shows
-└── Downloads
-    ├── incomplete
-    ├── movies
-    └── tv
+└── TV Shows
 ```
 
 Enable ownership on the drive (recommended):
@@ -78,13 +113,6 @@ Create the folder if needed:
 ```bash
 mkdir -p ~/docker/servarr
 cd ~/docker/servarr
-```
-
-Create `.env` file with NordVPN **service credentials**:
-
-```bash
-NORD_USER=your_nordvpn_service_username
-NORD_PASS=your_nordvpn_service_password
 ```
 
 ---
@@ -115,18 +143,25 @@ Open each service in a browser:
 | Radarr      | http://<host-ip>:7878 |
 | Sonarr      | http://<host-ip>:8989 |
 | Prowlarr    | http://<host-ip>:9696 |
-| qBittorrent | http://<host-ip>:8080 |
+| RDTClient   | http://<host-ip>:6500 |
 
 ---
 
-### qBittorrent Setup
+### RDTClient Setup (Debrid-Link)
 
-- Set WebUI password
-- Enable incomplete downloads:
-  - `/downloads/incomplete`
-- Create categories:
-  - `movies` → `/downloads/movies`
-  - `tv` → `/downloads/tv`
+1. Open RDTClient at `http://<host-ip>:6500`
+2. Create admin credentials on first login
+3. Go to **Settings** and configure:
+   - **Provider**: Select `DebridLink`
+   - **API Key**: Enter your Debrid-Link API key (get from [debrid-link.com](https://debrid-link.com))
+   - **Download path**: `/data/downloads`
+   - **Mapped path**: `/Volumes/debrid-downloads` (for arr apps to find files)
+   - **Post Torrent Download Action**: `Download all files to host`
+   - **Only Download Available Files**: Enabled
+   - **Minimum File Size to Download**: `5` MB (avoid small files)
+4. Create categories:
+   - `radarr` → for movies
+   - `sonarr` → for TV shows
 
 ---
 
@@ -147,10 +182,11 @@ Prowlarr automatically syncs indexers to Radarr and Sonarr.
 ### Radarr Setup (Movies)
 
 - Root folder: `/movies`
-- Add qBittorrent download client:
-  - Host: `gluetun`
-  - Port: `8080`
-  - Category: `movies`
+- Add RDTClient as download client:
+  - **Type**: qBittorrent (RDTClient emulates qBit API)
+  - **Host**: `rdtclient`
+  - **Port**: `6500`
+  - **Category**: `radarr`
 - Enable upgrades in quality profile
 
 ---
@@ -158,10 +194,11 @@ Prowlarr automatically syncs indexers to Radarr and Sonarr.
 ### Sonarr Setup (TV)
 
 - Root folder: `/tv`
-- Add qBittorrent download client:
-  - Host: `gluetun`
-  - Port: `8080`
-  - Category: `tv`
+- Add RDTClient as download client:
+  - **Type**: qBittorrent (RDTClient emulates qBit API)
+  - **Host**: `rdtclient`
+  - **Port**: `6500`
+  - **Category**: `sonarr`
 - Enable upgrades in quality profile
 
 ---
@@ -203,7 +240,8 @@ Request:
 
 Confirm:
 
-- Download starts
+- Debrid-Link shows torrent cached
+- RDTClient downloads files to SMB share
 - File moves to Movies / TV Shows
 - Plex updates automatically
 
@@ -211,15 +249,16 @@ Confirm:
 
 ## Architecture Overview
 
-- **Plex** runs natively on macOS (no VPN)
+- **Plex** runs natively on macOS
 - **Docker stack (Colima)** handles automation and downloads
-- **Torrent traffic is forced through VPN (NordVPN)**
+- **Debrid-Link** handles torrent caching in the cloud (no torrents on your network)
+- **RDTClient** downloads cached files via HTTP to your NAS
 - **Requests are done via phone (Overseerr)**
 
 Flow:
 
 ```
-Phone → Overseerr → Radarr / Sonarr → qBittorrent (VPN) → Media folders → Plex
+Phone → Overseerr → Radarr/Sonarr → RDTClient → Debrid-Link Cloud → HTTP Download → SMB NAS → Plex
 ```
 
 ---
@@ -229,15 +268,14 @@ Phone → Overseerr → Radarr / Sonarr → qBittorrent (VPN) → Media folders 
 ```
 /Volumes/storage/Media
 ├── Movies
-├── TV Shows
-└── Downloads
-    ├── incomplete
-    ├── movies
-    └── tv
+└── TV Shows
+
+/Volumes/debrid-downloads (SMB mount)
+└── (temporary download staging)
 ```
 
 - **Movies / TV Shows** → Plex libraries
-- **Downloads** → Temporary staging (not scanned by Plex)
+- **debrid-downloads** → Temporary staging from Debrid-Link (not scanned by Plex)
 
 ---
 
@@ -265,55 +303,67 @@ docker-compose down
 
 ## Running Services
 
-| Service      | Purpose                        | URL / Port             |
-| ------------ | ------------------------------ | ---------------------- |
-| Plex         | Media playback                 | http://<host-ip>:32400 |
-| Overseerr    | Phone-friendly request UI      | http://<host-ip>:5055  |
-| Radarr       | Movie automation               | http://<host-ip>:7878  |
-| Sonarr       | TV automation                  | http://<host-ip>:8989  |
-| Prowlarr     | Indexer management             | http://<host-ip>:9696  |
-| qBittorrent  | Torrent client (VPN only)      | http://<host-ip>:8080  |
-| Gluetun      | VPN container (NordVPN)        | internal               |
-| FlareSolverr | Cloudflare solver for trackers | internal (8191)        |
+| Service      | Purpose                           | URL / Port             |
+| ------------ | --------------------------------- | ---------------------- |
+| Plex         | Media playback                    | http://<host-ip>:32400 |
+| Overseerr    | Phone-friendly request UI         | http://<host-ip>:5055  |
+| Radarr       | Movie automation                  | http://<host-ip>:7878  |
+| Sonarr       | TV automation                     | http://<host-ip>:8989  |
+| Prowlarr     | Indexer management                | http://<host-ip>:9696  |
+| RDTClient    | Debrid download client (qBit API) | http://<host-ip>:6500  |
+| FlareSolverr | Cloudflare solver for trackers    | internal (8191)        |
 
 ---
 
-## VPN Setup
+## Debrid-Link Setup
 
-- VPN provider: **NordVPN**
-- VPN runs **only inside Docker**
-- qBittorrent shares network with Gluetun
-- Plex traffic is **not** routed through VPN
+Debrid-Link is a cloud-based service that:
 
-Verification:
+1. Caches torrents on their servers (no torrents on your network)
+2. Provides direct HTTP download links for cached files
+3. Keeps files available for re-download
 
-```bash
-docker exec -it gluetun wget -qO- https://ipinfo.io/ip
-docker exec -it qbittorrent wget -qO- https://ipinfo.io/ip
-curl https://ipinfo.io/ip
-```
+Get your API key from: https://debrid-link.com/webapp/apikey
 
-- Gluetun + qBittorrent → VPN IP
-- Mac host → ISP IP
+RDTClient uses this API to:
+- Submit torrents to Debrid-Link
+- Monitor download progress
+- Download completed files to your NAS via HTTP
+- Report status back to Radarr/Sonarr
 
 ---
 
-## Categories (qBittorrent)
+## Categories (RDTClient)
 
-- `movies` → `/downloads/movies`
-- `tv` → `/downloads/tv`
+Configure in RDTClient settings:
 
-Radarr uses category `movies`  
-Sonarr uses category `tv`
+- `radarr` → Movies
+- `sonarr` → TV Shows
+
+Radarr uses category `radarr`  
+Sonarr uses category `sonarr`
 
 ---
 
 ## Recovery Checklist (after crash/reboot)
 
-1. `colima start`
-2. `cd ~/docker/servarr`
-3. `docker-compose up -d`
-4. Verify:
+1. Verify SMB share is mounted:
+   ```bash
+   ls /Volumes/debrid-downloads
+   ```
+   If not mounted, remount:
+   ```bash
+   sudo mount -t smbfs '//username:password@192.168.1.1/H' /Volumes/debrid-downloads
+   ```
+
+2. Start Colima and Docker stack:
+   ```bash
+   colima start
+   cd ~/docker/servarr
+   docker-compose up -d
+   ```
+
+3. Verify:
    - Overseerr loads
-   - qBittorrent reachable
-   - Gluetun status healthy
+   - RDTClient reachable and shows connected to Debrid-Link
+   - SMB mount accessible from containers

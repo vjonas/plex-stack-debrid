@@ -1,40 +1,18 @@
 services:
-  gluetun:
-    image: qmcgaw/gluetun:latest
-    container_name: gluetun
-    cap_add:
-      - NET_ADMIN
-    devices:
-      - /dev/net/tun:/dev/net/tun
-    environment:
-      - TZ=Europe/Brussels
-      - VPN_SERVICE_PROVIDER=nordvpn
-      - VPN_TYPE=openvpn
-      - OPENVPN_USER=${NORD_USER}
-      - OPENVPN_PASSWORD=${NORD_PASS}
-      - SERVER_COUNTRIES=Belgium
-    ports:
-      - "8080:8080"
-      - "6881:6881"
-      - "6881:6881/udp"
-    restart: unless-stopped
-
-  qbittorrent:
-    image: lscr.io/linuxserver/qbittorrent:latest
-    container_name: qbittorrent
-    network_mode: "service:gluetun"
-    depends_on:
-      - gluetun
+  rdtclient:
+    image: rogerfar/rdtclient:latest
+    container_name: rdtclient
     environment:
       - PUID=501
       - PGID=20
       - TZ=Europe/Brussels
-      - UMASK=002
-      - WEBUI_PORT=8080
-      # DISABLE_CHOWN is irrelevant now since /config isn't a bind mount
+    ports:
+      - "6500:6500"
     volumes:
-      - qbittorrent_config:/config
-      - "/Volumes/storage/Media/Downloads:/downloads"
+      - rdtclient_config:/data/db
+      - "/Volumes/tp-share/debrid-link/downloads:/data/downloads"
+      - "/Volumes/tp-share/debrid-link/movies:/movies"
+      - "/Volumes/tp-share/debrid-link/tvshows:/tv"
     restart: unless-stopped
 
   prowlarr:
@@ -63,8 +41,8 @@ services:
       - "7878:7878"
     volumes:
       - radarr_config:/config
-      - "/Volumes/storage/Media/Movies:/movies"
-      - "/Volumes/storage/Media/Downloads:/downloads"
+      - "/Volumes/tp-share/debrid-link/movies:/movies"
+      - "/Volumes/tp-share/debrid-link/downloads:/downloads"
     restart: unless-stopped
 
   sonarr:
@@ -79,8 +57,8 @@ services:
       - "8989:8989"
     volumes:
       - sonarr_config:/config
-      - "/Volumes/storage/Media/TV Shows:/tv"
-      - "/Volumes/storage/Media/Downloads:/downloads"
+      - "/Volumes/tp-share/debrid-link/tvshows:/tv"
+      - "/Volumes/tp-share/debrid-link/downloads:/downloads"
     restart: unless-stopped
 
   overseerr:
@@ -108,7 +86,7 @@ services:
     restart: unless-stopped
 
 volumes:
-  qbittorrent_config:
+  rdtclient_config:
   prowlarr_config:
   radarr_config:
   sonarr_config:
