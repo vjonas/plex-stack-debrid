@@ -227,6 +227,72 @@ curl -s -X POST "http://localhost:9696/api/v1/indexer" \
         "fields": [{"name": "definitionFile", "value": "thepiratebay"}]
     }' > /dev/null 2>&1 || true
 
+curl -s -X POST "http://localhost:9696/api/v1/indexer" \
+    -H "X-Api-Key: $PROWLARR_API" \
+    -H "Content-Type: application/json" \
+    -d '{
+        "name": "1337x",
+        "definitionName": "1337x",
+        "implementation": "Cardigann",
+        "configContract": "CardigannSettings",
+        "enable": true,
+        "protocol": "torrent",
+        "priority": 25,
+        "appProfileId": 1,
+        "fields": [{"name": "definitionFile", "value": "1337x"}]
+    }' > /dev/null 2>&1 || true
+
+echo "  Done!"
+
+# Step 7: Add indexers directly to Radarr/Sonarr databases
+# This bypasses the strict API validation that can fail even with valid indexers
+echo ""
+echo "Step 7: Adding indexers directly to Radarr/Sonarr..."
+
+# Get Prowlarr indexer IDs
+echo "  Getting Prowlarr indexer IDs..."
+TPB_ID=$(curl -s "http://localhost:9696/api/v1/indexer" -H "X-Api-Key: $PROWLARR_API" | \
+    python3 -c "import sys,json; indexers=json.load(sys.stdin); print(next((i['id'] for i in indexers if 'piratebay' in i.get('name','').lower()), ''))" 2>/dev/null || echo "")
+EZTV_ID=$(curl -s "http://localhost:9696/api/v1/indexer" -H "X-Api-Key: $PROWLARR_API" | \
+    python3 -c "import sys,json; indexers=json.load(sys.stdin); print(next((i['id'] for i in indexers if 'eztv' in i.get('name','').lower()), ''))" 2>/dev/null || echo "")
+X1337_ID=$(curl -s "http://localhost:9696/api/v1/indexer" -H "X-Api-Key: $PROWLARR_API" | \
+    python3 -c "import sys,json; indexers=json.load(sys.stdin); print(next((i['id'] for i in indexers if '1337' in i.get('name','').lower()), ''))" 2>/dev/null || echo "")
+
+# Install sqlite in containers
+echo "  Installing sqlite in containers..."
+docker exec radarr apk add --no-cache sqlite > /dev/null 2>&1 || true
+docker exec sonarr apk add --no-cache sqlite > /dev/null 2>&1 || true
+
+# Add indexers to Radarr database
+echo "  Adding indexers to Radarr..."
+if [ -n "$TPB_ID" ]; then
+    docker exec radarr sqlite3 /config/radarr.db "INSERT OR IGNORE INTO Indexers (Name, Implementation, Settings, ConfigContract, EnableRss, EnableAutomaticSearch, EnableInteractiveSearch, Priority, Tags) VALUES ('ThePirateBay', 'Torznab', '{\"baseUrl\": \"http://prowlarr:9696/$TPB_ID/\", \"apiPath\": \"/api\", \"apiKey\": \"$PROWLARR_API\", \"categories\": [2000, 2010, 2020, 2030, 2040, 2045, 2050, 2060], \"minimumSeeders\": 1}', 'TorznabSettings', 1, 1, 1, 25, '[]');" 2>/dev/null || true
+fi
+if [ -n "$X1337_ID" ]; then
+    docker exec radarr sqlite3 /config/radarr.db "INSERT OR IGNORE INTO Indexers (Name, Implementation, Settings, ConfigContract, EnableRss, EnableAutomaticSearch, EnableInteractiveSearch, Priority, Tags) VALUES ('1337x', 'Torznab', '{\"baseUrl\": \"http://prowlarr:9696/$X1337_ID/\", \"apiPath\": \"/api\", \"apiKey\": \"$PROWLARR_API\", \"categories\": [2000, 2010, 2020, 2030, 2040, 2045, 2050, 2060], \"minimumSeeders\": 1}', 'TorznabSettings', 1, 1, 1, 25, '[]');" 2>/dev/null || true
+fi
+
+# Add indexers to Sonarr database
+echo "  Adding indexers to Sonarr..."
+if [ -n "$TPB_ID" ]; then
+    docker exec sonarr sqlite3 /config/sonarr.db "INSERT OR IGNORE INTO Indexers (Name, Implementation, Settings, ConfigContract, EnableRss, EnableAutomaticSearch, EnableInteractiveSearch, Priority, Tags) VALUES ('ThePirateBay', 'Torznab', '{\"baseUrl\": \"http://prowlarr:9696/$TPB_ID/\", \"apiPath\": \"/api\", \"apiKey\": \"$PROWLARR_API\", \"categories\": [5000, 5010, 5020, 5030, 5040, 5045, 5050, 5070], \"minimumSeeders\": 1}', 'TorznabSettings', 1, 1, 1, 25, '[]');" 2>/dev/null || true
+fi
+if [ -n "$EZTV_ID" ]; then
+    docker exec sonarr sqlite3 /config/sonarr.db "INSERT OR IGNORE INTO Indexers (Name, Implementation, Settings, ConfigContract, EnableRss, EnableAutomaticSearch, EnableInteractiveSearch, Priority, Tags) VALUES ('EZTV', 'Torznab', '{\"baseUrl\": \"http://prowlarr:9696/$EZTV_ID/\", \"apiPath\": \"/api\", \"apiKey\": \"$PROWLARR_API\", \"categories\": [5000, 5010, 5020, 5030, 5040, 5045, 5050, 5070], \"minimumSeeders\": 1}', 'TorznabSettings', 1, 1, 1, 25, '[]');" 2>/dev/null || true
+fi
+if [ -n "$X1337_ID" ]; then
+    docker exec sonarr sqlite3 /config/sonarr.db "INSERT OR IGNORE INTO Indexers (Name, Implementation, Settings, ConfigContract, EnableRss, EnableAutomaticSearch, EnableInteractiveSearch, Priority, Tags) VALUES ('1337x', 'Torznab', '{\"baseUrl\": \"http://prowlarr:9696/$X1337_ID/\", \"apiPath\": \"/api\", \"apiKey\": \"$PROWLARR_API\", \"categories\": [5000, 5010, 5020, 5030, 5040, 5045, 5050, 5070], \"minimumSeeders\": 1}', 'TorznabSettings', 1, 1, 1, 25, '[]');" 2>/dev/null || true
+fi
+
+# Restart services to pick up database changes
+echo "  Restarting Radarr and Sonarr..."
+docker restart radarr sonarr > /dev/null 2>&1
+
+# Wait for services to come back up
+sleep 10
+wait_for_service "Radarr" "http://localhost:7878"
+wait_for_service "Sonarr" "http://localhost:8989"
+
 echo "  Done!"
 
 echo ""

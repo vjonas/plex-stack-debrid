@@ -76,7 +76,8 @@ The setup script will:
 - Set up remote path mappings (RDTClient → arr apps)
 - Connect Prowlarr to Radarr/Sonarr
 - Add FlareSolverr proxy
-- Add public indexers (EZTV, ThePirateBay)
+- Add public indexers (EZTV, ThePirateBay, 1337x) to Prowlarr
+- **Add indexers directly to Radarr/Sonarr databases** (bypasses API validation issues)
 
 ---
 
@@ -222,8 +223,19 @@ These are configured automatically by `setup.sh`.
 ### "Path does not exist" errors
 Run `./setup.sh` to recreate download directories and path mappings.
 
-### Indexer sync issues
-In Prowlarr → Settings → Apps, click the sync button next to each app.
+### Indexer sync issues / "No indexers available"
+Prowlarr's automatic sync to Radarr/Sonarr often fails due to strict API validation. The setup script handles this by adding indexers directly to the databases. If you still have issues:
+
+```bash
+# Re-run setup to add indexers directly
+./setup.sh
+```
+
+Or manually add via database:
+```bash
+docker exec radarr apk add --no-cache sqlite
+docker exec radarr sqlite3 /config/radarr.db "SELECT Name FROM Indexers;"
+```
 
 ### RDTClient authentication fails
 The qBittorrent API in RDTClient uses your Debrid-Link login. Try leaving username blank and using API key as password, or check RDTClient's Account settings.
