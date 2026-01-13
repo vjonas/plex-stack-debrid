@@ -1,0 +1,21 @@
+{
+  "radarr": [
+    {
+      "host": "rdtclient",
+      "remotePath": "C:\\Downloads\\radarr\\",
+      "localPath": "/downloads/radarr/"
+    }
+  ],
+  "sonarr": [
+    {
+      "host": "rdtclient",
+      "remotePath": "C:\\Downloads\\sonarr\\",
+      "localPath": "/downloads/sonarr/"
+    },
+    {
+      "host": "rdtclient",
+      "remotePath": "C:\\Downloads\\tv-sonarr\\",
+      "localPath": "/downloads/tv-sonarr/"
+    }
+  ]
+}
