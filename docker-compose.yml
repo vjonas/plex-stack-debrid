@@ -10,9 +10,7 @@ services:
       - "6500:6500"
     volumes:
       - rdtclient_config:/data/db
-      - "/mnt/downloads:/data/downloads"
-      - "/mnt/downloads/movies:/movies"
-      - "/mnt/downloads/tvshows:/tv"
+      - "/mnt/downloads/debrid-link:/data"
     restart: unless-stopped
 
   prowlarr:
@@ -41,8 +39,7 @@ services:
       - "7878:7878"
     volumes:
       - radarr_config:/config
-      - "/mnt/downloads/movies:/movies"
-      - "/mnt/downloads:/downloads"
+      - "/mnt/downloads/debrid-link:/data"
     restart: unless-stopped
 
   sonarr:
@@ -57,8 +54,7 @@ services:
       - "8989:8989"
     volumes:
       - sonarr_config:/config
-      - "/mnt/downloads//tvshows:/tv"
-      - "/mnt/downloads:/downloads"
+      - "/mnt/downloads/debrid-link:/data"
     restart: unless-stopped
 
   overseerr:
