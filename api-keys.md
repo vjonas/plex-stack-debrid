@@ -1,0 +1,4 @@
+
+Radarr API Key: 360552b062a3472f94e5df4a5613023f
+Sonarr API Key: fd9a79191d794c9c82d8e6ee1bb2ceab
+prowlarr: 76220a4675be4fd39325cae531553244

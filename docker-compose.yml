@@ -3,24 +3,24 @@ services:
     image: rogerfar/rdtclient:latest
     container_name: rdtclient
     environment:
-      - PUID=501
-      - PGID=20
+      - PUID=1000
+      - PGID=1000
       - TZ=Europe/Brussels
     ports:
       - "6500:6500"
     volumes:
       - rdtclient_config:/data/db
-      - "/Volumes/tp-share/debrid-link/downloads:/data/downloads"
-      - "/Volumes/tp-share/debrid-link/movies:/movies"
-      - "/Volumes/tp-share/debrid-link/tvshows:/tv"
+      - "/mnt/downloads:/data/downloads"
+      - "/mnt/downloads/movies:/movies"
+      - "/mnt/downloads/tvshows:/tv"
     restart: unless-stopped
 
   prowlarr:
     image: lscr.io/linuxserver/prowlarr:latest
     container_name: prowlarr
     environment:
-      - PUID=501
-      - PGID=20
+      - PUID=1000
+      - PGID=1000
       - TZ=Europe/Brussels
       - UMASK=002
     ports:
@@ -33,40 +33,40 @@ services:
     image: lscr.io/linuxserver/radarr:latest
     container_name: radarr
     environment:
-      - PUID=501
-      - PGID=20
+      - PUID=1000
+      - PGID=1000
       - TZ=Europe/Brussels
       - UMASK=002
     ports:
       - "7878:7878"
     volumes:
       - radarr_config:/config
-      - "/Volumes/tp-share/debrid-link/movies:/movies"
-      - "/Volumes/tp-share/debrid-link/downloads:/downloads"
+      - "/mnt/downloads/movies:/movies"
+      - "/mnt/downloads:/downloads"
     restart: unless-stopped
 
   sonarr:
     image: lscr.io/linuxserver/sonarr:latest
     container_name: sonarr
     environment:
-      - PUID=501
-      - PGID=20
+      - PUID=1000
+      - PGID=1000
       - TZ=Europe/Brussels
       - UMASK=002
     ports:
       - "8989:8989"
     volumes:
       - sonarr_config:/config
-      - "/Volumes/tp-share/debrid-link/tvshows:/tv"
-      - "/Volumes/tp-share/debrid-link/downloads:/downloads"
+      - "/mnt/downloads//tvshows:/tv"
+      - "/mnt/downloads:/downloads"
     restart: unless-stopped
 
   overseerr:
     image: lscr.io/linuxserver/overseerr:latest
     container_name: overseerr
     environment:
-      - PUID=501
-      - PGID=20
+      - PUID=1000
+      - PGID=1000
       - TZ=Europe/Brussels
       - UMASK=002
     ports:
