@@ -242,3 +242,77 @@ The qBittorrent API in RDTClient uses your Debrid-Link login. Try leaving userna
 
 ### SMB mount permission denied
 Mount via Finder instead of command line for proper user permissions.
+
+
+
+
+
+
+SETUPPPPPPPPP
+
+========================================
+ Setup Steps
+
+
+  1. Configure FlareSolverr in Prowlarr
+
+  1. Open Prowlarr at http://your-server:9696
+  2. Go to Settings → Indexers
+  3. Click + under "Indexer Proxies"
+  4. Select FlareSolverr
+  5. Set:
+    • Name: FlareSolverr
+    • Host: http://flaresolverr:8191
+    • Tags: leave empty (applies to all) or create a tag for specific indexers
+  6. Click Test then Save
+
+
+  2. Add Indexers in Prowlarr
+
+  1. In Prowlarr, go to Indexers
+  2. Click Add Indexer
+  3. Search for your preferred indexers (e.g., 1337x, RARBG, TorrentGalaxy, etc.)
+  4. Configure each indexer with any required credentials
+  5. If an indexer has Cloudflare protection, tag it to use FlareSolverr
+
+
+  3. Connect Prowlarr to Radarr & Sonarr
+
+  1. In Prowlarr, go to Settings → Apps
+  2. Click + and select Radarr:
+    • Name: Radarr
+    • Sync Level: Full Sync
+    • Prowlarr Server: http://prowlarr:9696
+    • Radarr Server: http://radarr:7878
+    • API Key: (get from Radarr → Settings → General)
+  3. Click Test then Save
+  4. Repeat for Sonarr:
+    • Sonarr Server: http://sonarr:8989
+    • API Key: (get from Sonarr → Settings → General)
+
+
+  4. Sync Indexers
+
+  1. In Prowlarr, click Sync App Indexers (or it syncs automatically)
+  2. Your indexers will now appear in Radarr and Sonarr automatically
+
+
+  5. Configure Download Client in Radarr/Sonarr
+
+  1. In Radarr → Settings → Download Clients
+  2. Click + and add your RDTClient (or whatever download client you use)
+  3. Repeat for Sonarr
+
+  ---
+
+  Quick Reference - URLs (internal Docker network)
+
+  | Service | Internal URL | External URL |
+  |---------|--------------|--------------|
+  | FlareSolverr | http://flaresolverr:8191 | http://your-server:8191 |
+  | Prowlarr | http://prowlarr:9696 | http://your-server:9696 |
+  | Radarr | http://radarr:7878 | http://your-server:7878 |
+  | Sonarr | http://sonarr:8989 | http://your-server:8989 |
+  | RDTClient | http://rdtclient:6500 | http://your-server:6500 |
+  Use the internal URLs when services talk to each other inside Docker.
+--------------------------------------------------------------------
