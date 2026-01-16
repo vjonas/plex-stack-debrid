@@ -81,9 +81,34 @@ services:
       - "8191:8191"
     restart: unless-stopped
 
+  clubnzb-proxy:
+    build: ./clubnzb-proxy
+    container_name: clubnzb-proxy
+    environment:
+      - TZ=Europe/Brussels
+    ports:
+      - "5080:5080"
+    restart: unless-stopped
+
+  sabnzbd:
+    image: lscr.io/linuxserver/sabnzbd:latest
+    container_name: sabnzbd
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Brussels
+      - UMASK=002
+    ports:
+      - "8080:8080"
+    volumes:
+      - sabnzbd_config:/config
+      - "/mnt/downloads/debrid-link:/data"
+    restart: unless-stopped
+
 volumes:
   rdtclient_config:
   prowlarr_config:
   radarr_config:
   sonarr_config:
   overseerr_config:
+  sabnzbd_config:

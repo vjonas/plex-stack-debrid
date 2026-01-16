@@ -316,3 +316,80 @@ SETUPPPPPPPPP
   | RDTClient | http://rdtclient:6500 | http://your-server:6500 |
   Use the internal URLs when services talk to each other inside Docker.
 --------------------------------------------------------------------
+SETUP NZB SERVER with sabnzb and our new clubnzb proxy app===================
+Step 1: Create Directory Structure
+
+
+     1 │# Create usenet download directories
+     2 │sudo mkdir -p /mnt/downloads/debrid-link/downloads/usenet/{complete,incomplete}
+     3 │sudo mkdir -p /mnt/downloads/debrid-link/downloads/usenet/complete/{movies,tv}
+     4 │sudo chown -R 1000:1000 /mnt/downloads/debrid-link/downloads
+
+
+  Step 2: Restart the Stack
+
+
+     1 │cd /home/jonas/git/plex-stack-debrid
+     2 │docker compose up -d
+
+
+  Step 3: Configure SABnzbd (http://localhost:8080)
+
+
+  First-time wizard:
+
+  1. Set language, click through
+  2. Add your Usenet server (you need this from Eweka or similar):
+    • Host: news.eweka.nl
+    • Port: 563
+    • SSL: Yes
+    • Username/Password: from your Eweka account
+
+
+  Configure folders (Config → Folders):
+
+  | Setting | Path |
+  |---------|------|
+  | Temporary Download Folder | /data/downloads/usenet/incomplete |
+  | Completed Download Folder | /data/downloads/usenet/complete |
+
+  Configure categories (Config → Categories):
+
+  Add these two categories:
+  | Category | Folder |
+  |----------|--------|
+  | movies | movies |
+  | tv | tv |
+  This makes completed downloads go to:
+  • Movies: /data/downloads/usenet/complete/movies
+  • TV: /data/downloads/usenet/complete/tv
+
+
+  Step 4: Get SABnzbd API Key
+
+  In SABnzbd: Config → General → API Key - copy this.
+
+  Step 5: Add SABnzbd to Radarr (http://localhost:7878)
+
+  Settings → Download Clients → Add → SABnzbd
+  | Setting | Value |
+  |---------|-------|
+  | Name | SABnzbd |
+  | Host | sabnzbd |
+  | Port | 8080 |
+  | API Key | (paste from step 4) |
+  | Category | movies |
+  Click Test then Save.
+
+  Step 6: Add SABnzbd to Sonarr (http://localhost:8989)
+
+  Settings → Download Clients → Add → SABnzbd
+  | Setting | Value |
+  |---------|-------|
+  | Name | SABnzbd |
+  | Host | sabnzbd |
+  | Port | 8080 |
+  | API Key | (paste from step 4) |
+  | Category | tv |
+  Click Test then Save.
+i==========================================================================
