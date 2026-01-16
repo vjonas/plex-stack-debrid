@@ -12,46 +12,11 @@ from typing import Optional
 import httpx
 from bs4 import BeautifulSoup
 from fastapi import FastAPI, Query, Response
-from fastapi.responses import StreamingResponse
 
 app = FastAPI(title="ClubNZB Proxy", version="1.0.0")
 
 BASE_URL = "https://www.clubnzb.com"
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-
-# ClubNZB (Spotweb) category mappings to Newznab standard categories
-# cat0_z0 = Image/Movies, cat0_z1 = Series/TV, cat0_z2 = Books, cat0_z3 = Music
-CLUBNZB_TO_NEWZNAB = {
-    "spotcat0_z0": "2000",  # Movies
-    "spotcat0_z1": "5000",  # TV Series
-    "spotcat0_z2": "7000",  # Books
-    "spotcat0_z3": "3000",  # Audio/Music
-    "spotcat1": "3000",     # Music
-    "spotcat2": "4000",     # Games
-    "spotcat3": "4000",     # Applications
-}
-
-NEWZNAB_TO_CLUBNZB = {
-    # Movies
-    "2000": "cat0_z0",
-    "2010": "cat0_z0",
-    "2020": "cat0_z0",
-    "2030": "cat0_z0",
-    "2040": "cat0_z0",
-    "2045": "cat0_z0",
-    "2050": "cat0_z0",
-    # TV
-    "5000": "cat0_z1",
-    "5010": "cat0_z1",
-    "5020": "cat0_z1",
-    "5030": "cat0_z1",
-    "5040": "cat0_z1",
-    "5045": "cat0_z1",
-    "5050": "cat0_z1",
-    "5060": "cat0_z1",
-    "5070": "cat0_z1",
-    "5080": "cat0_z1",
-}
 
 
 def generate_guid(message_id: str) -> str:
@@ -84,11 +49,28 @@ def parse_size(size_str: str) -> int:
     return 0
 
 
-def parse_clubnzb_category(row_classes: str) -> str:
-    """Convert Spotweb row classes to Newznab category"""
-    for cls, newznab_cat in CLUBNZB_TO_NEWZNAB.items():
-        if cls in row_classes:
-            return newznab_cat
+def detect_category_from_classes(row_classes: str) -> str:
+    """Detect Newznab category from Spotweb row classes"""
+    classes = row_classes.lower()
+    
+    # Check for specific sub-categories
+    if "spotcat0_z0" in classes:
+        return "2000"  # Movies
+    if "spotcat0_z1" in classes:
+        return "5000"  # TV Series
+    if "spotcat0_z2" in classes:
+        return "7000"  # Books
+    if "spotcat0_z3" in classes:
+        return "5000"  # This seems to contain Dutch TV shows too
+    if "spotcat1" in classes:
+        return "3000"  # Music
+    if "spotcat2" in classes:
+        return "4000"  # Games
+    if "spotcat3" in classes:
+        return "4000"  # Applications
+    if "spotcat0" in classes:
+        return "2000"  # Default Image to Movies
+    
     return "5000"  # Default to TV
 
 
@@ -98,28 +80,18 @@ async def search_clubnzb(query: str, category: Optional[str] = None) -> list[dic
     """
     results = []
     
-    # Build search URL - ClubNZB uses Spotweb format
-    # Format: search[value][]=Title:=:DEF:searchterm for exact-ish match
-    # Use ~cat0_z1 for TV Series category (the ~ prefix is important)
-    
-    # Determine category tree
-    cat_tree = ""
-    if category and category in NEWZNAB_TO_CLUBNZB:
-        cat_tree = "~" + NEWZNAB_TO_CLUBNZB[category]  # Prefix with ~ for Spotweb
-    
-    # Build URL parts
-    parts = [
-        f"search[value][]=Title:=:DEF:{urllib.parse.quote(query)}",
-        "sortby=stamp",
-        "sortdir=DESC",
-    ]
-    
-    if cat_tree:
-        parts.insert(0, f"search[tree]={cat_tree}")
-    
-    search_url = f"{BASE_URL}/?" + "&".join(parts)
+    # Build search URL - use unfiltered search for best results
+    # This searches across all categories, which works better for Dutch content
+    search_url = (
+        f"{BASE_URL}/?"
+        f"search[value][]=Title:=:DEF:{urllib.parse.quote(query)}"
+        f"&search[unfiltered]=true"  # Important: search across all categories
+        f"&sortby=stamp"
+        f"&sortdir=DESC"
+    )
     
     print(f"[ClubNZB] Searching: {search_url}")
+    print(f"[ClubNZB] Query: '{query}', Requested category: {category}")
     
     async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client:
         headers = {"User-Agent": USER_AGENT}
@@ -136,7 +108,7 @@ async def search_clubnzb(query: str, category: Optional[str] = None) -> list[dic
         # Find all result rows in the spots table
         rows = soup.select("table.spots tbody#spots tr")
         
-        print(f"[ClubNZB] Found {len(rows)} results")
+        print(f"[ClubNZB] Found {len(rows)} rows in HTML")
         
         for row in rows:
             try:
@@ -146,10 +118,13 @@ async def search_clubnzb(query: str, category: Optional[str] = None) -> list[dic
                 # Extract title from td.title a.spotlink
                 title_elem = row.select_one("td.title a.spotlink")
                 if not title_elem:
+                    print(f"[ClubNZB] Row skipped: no title element")
                     continue
                 
+                # Get title from title attribute or text content
                 title = title_elem.get("title") or title_elem.text.strip()
                 if not title:
+                    print(f"[ClubNZB] Row skipped: empty title")
                     continue
                 
                 # Get detail link
@@ -163,13 +138,16 @@ async def search_clubnzb(query: str, category: Optional[str] = None) -> list[dic
                 message_id = ""
                 if nzb_elem:
                     nzb_link = nzb_elem.get("href", "")
-                    # Extract message ID from URL
                     if "messageid=" in nzb_link:
                         message_id = urllib.parse.unquote(
                             nzb_link.split("messageid=")[1].split("&")[0]
                         )
                     if nzb_link and not nzb_link.startswith("http"):
                         nzb_link = BASE_URL + "/" + nzb_link.lstrip("/")
+                
+                if not nzb_link:
+                    print(f"[ClubNZB] Row skipped: no NZB link for '{title[:50]}'")
+                    continue
                 
                 # Extract file size from td.filesize
                 size_elem = row.select_one("td.filesize")
@@ -181,7 +159,6 @@ async def search_clubnzb(query: str, category: Optional[str] = None) -> list[dic
                 pub_date = ""
                 if date_elem:
                     date_title = date_elem.get("title", "")
-                    # Format: "16/01/2026 (13:37:04)"
                     if date_title:
                         try:
                             date_match = re.match(r"(\d{2}/\d{2}/\d{4})\s*\((\d{2}:\d{2}:\d{2})\)", date_title)
@@ -194,16 +171,18 @@ async def search_clubnzb(query: str, category: Optional[str] = None) -> list[dic
                 if not pub_date:
                     pub_date = datetime.now().strftime("%a, %d %b %Y %H:%M:%S +0000")
                 
-                # Extract category from td.category
+                # Extract category name from td.category
                 cat_elem = row.select_one("td.category a")
                 category_name = cat_elem.text.strip() if cat_elem else ""
                 
-                # Extract genre
-                genre_elem = row.select_one("td.genre a")
-                genre = genre_elem.text.strip() if genre_elem else ""
+                # Detect category from row classes, or use requested category
+                detected_cat = detect_category_from_classes(row_classes)
                 
-                # Determine Newznab category
-                newznab_cat = parse_clubnzb_category(row_classes)
+                # If a specific category was requested, use it; otherwise use detected
+                if category:
+                    newznab_cat = category
+                else:
+                    newznab_cat = detected_cat
                 
                 # Generate unique ID
                 guid = generate_guid(message_id or title)
@@ -216,15 +195,17 @@ async def search_clubnzb(query: str, category: Optional[str] = None) -> list[dic
                     "pub_date": pub_date,
                     "category": newznab_cat,
                     "category_name": category_name,
-                    "genre": genre,
                     "detail_link": detail_link,
                     "message_id": message_id,
                 })
                 
             except Exception as e:
                 print(f"[ClubNZB] Error parsing row: {e}")
+                import traceback
+                traceback.print_exc()
                 continue
     
+    print(f"[ClubNZB] Returning {len(results)} results")
     return results
 
 
@@ -247,6 +228,7 @@ def build_newznab_xml(results: list[dict], offset: int = 0, total: int = 0) -> s
     
     xml_items = []
     for item in results:
+        cat_id = item.get('category', '5000')
         xml_items.append(f"""
     <item>
       <title>{escape_xml(item['title'])}</title>
@@ -254,12 +236,10 @@ def build_newznab_xml(results: list[dict], offset: int = 0, total: int = 0) -> s
       <link>{escape_xml(item['link'])}</link>
       <comments>{escape_xml(item.get('detail_link', ''))}</comments>
       <pubDate>{item['pub_date']}</pubDate>
-      <category>{escape_xml(item.get('category_name', 'TV'))}</category>
-      <description>{escape_xml(item.get('genre', ''))}</description>
+      <category>{cat_id}</category>
       <enclosure url="{escape_xml(item['link'])}" length="{item['size']}" type="application/x-nzb" />
-      <newznab:attr name="guid" value="{escape_xml(item['guid'])}" />
+      <newznab:attr name="category" value="{cat_id}" />
       <newznab:attr name="size" value="{item['size']}" />
-      <newznab:attr name="category" value="{item.get('category', '5000')}" />
       <newznab:attr name="grabs" value="0" />
     </item>""")
     
@@ -344,27 +324,29 @@ async def api_endpoint(
     if t in ("search", "tvsearch", "movie", "tv"):
         search_query = q or ""
         
-        # For TV search, append season/episode to query
-        if t in ("tvsearch", "tv") and search_query:
-            if season:
-                search_query += f" S{season.zfill(2)}"
-            if ep:
-                search_query += f"E{ep.zfill(2)}"
+        # For TV search, DON'T append season/episode to query
+        # ClubNZB doesn't use standard S##E## naming consistently
+        # Just search for the show name and let Sonarr filter results
+        # The season/episode info is logged but not appended
+        if t in ("tvsearch", "tv") and (season or ep):
+            print(f"[ClubNZB] TV search requested: S{season}E{ep} (not appending to query)")
         
-        # Determine category
+        # Determine the category to tag results with
         category = None
         if cat:
-            # Take first category if multiple provided
-            category = cat.split(",")[0]
+            first_cat = cat.split(",")[0]
+            if first_cat.startswith("2"):
+                category = "2000"
+            elif first_cat.startswith("5"):
+                category = "5000"
         elif t == "movie":
             category = "2000"
         elif t in ("tvsearch", "tv"):
             category = "5000"
         
-        # If no query, return empty results (Prowlarr test)
+        # If no query, do a generic search
         if not search_query:
-            # Return a simple test search with a common term
-            search_query = "the"
+            search_query = "2026"  # Search for recent content
         
         results = await search_clubnzb(search_query, category)
         
