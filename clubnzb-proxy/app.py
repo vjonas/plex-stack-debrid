@@ -324,13 +324,6 @@ async def api_endpoint(
     if t in ("search", "tvsearch", "movie", "tv"):
         search_query = q or ""
         
-        # For TV search, DON'T append season/episode to query
-        # ClubNZB doesn't use standard S##E## naming consistently
-        # Just search for the show name and let Sonarr filter results
-        # The season/episode info is logged but not appended
-        if t in ("tvsearch", "tv") and (season or ep):
-            print(f"[ClubNZB] TV search requested: S{season}E{ep} (not appending to query)")
-        
         # Determine the category to tag results with
         category = None
         if cat:
@@ -348,14 +341,43 @@ async def api_endpoint(
         if not search_query:
             search_query = "2026"  # Search for recent content
         
-        results = await search_clubnzb(search_query, category)
+        # For TV search, try BOTH approaches:
+        # 1. Search with just the show name (broader, catches different season numbering)
+        # 2. If season/ep provided, also try with S##E## (for exact matches)
+        all_results = []
+        seen_guids = set()
+        
+        # First search: just the show name
+        print(f"[ClubNZB] Search 1: Show name only '{search_query}'")
+        results1 = await search_clubnzb(search_query, category)
+        for r in results1:
+            if r['guid'] not in seen_guids:
+                all_results.append(r)
+                seen_guids.add(r['guid'])
+        
+        # Second search: with S##E## if provided (for TV searches)
+        if t in ("tvsearch", "tv") and search_query and (season or ep):
+            specific_query = search_query
+            if season:
+                specific_query += f" S{season.zfill(2)}"
+            if ep:
+                specific_query += f"E{ep.zfill(2)}"
+            
+            print(f"[ClubNZB] Search 2: With S##E## '{specific_query}'")
+            results2 = await search_clubnzb(specific_query, category)
+            for r in results2:
+                if r['guid'] not in seen_guids:
+                    all_results.append(r)
+                    seen_guids.add(r['guid'])
+        
+        print(f"[ClubNZB] Combined unique results: {len(all_results)}")
         
         # Apply offset and limit
-        total = len(results)
-        results = results[offset:offset + limit]
+        total = len(all_results)
+        all_results = all_results[offset:offset + limit]
         
         return Response(
-            content=build_newznab_xml(results, offset, total),
+            content=build_newznab_xml(all_results, offset, total),
             media_type="application/xml"
         )
     
