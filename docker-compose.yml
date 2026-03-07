@@ -1,18 +1,38 @@
 services:
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    container_name: gluetun
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      - TZ=Europe/Brussels
+      - VPN_SERVICE_PROVIDER=nordvpn
+      - VPN_TYPE=openvpn
+      - OPENVPN_USER=${NORD_USER}
+      - OPENVPN_PASSWORD=${NORD_PASS}
+      - SERVER_COUNTRIES=Belgium
+      - FIREWALL_INPUT_PORTS=6500,8080
+      - FIREWALL_OUTBOUND_SUBNETS=192.168.1.0/24,172.16.0.0/12
+    ports:
+      - "6500:6500"   # rdtclient
+      - "8080:8080"   # sabnzbd
+    restart: unless-stopped
+
   rdtclient:
     image: rogerfar/rdtclient:latest
     container_name: rdtclient
+    network_mode: "service:gluetun"
+    depends_on:
+      - gluetun
     environment:
       - PUID=1000
       - PGID=1000
       - TZ=Europe/Brussels
-    ports:
-      - "6500:6500"
     volumes:
-      - rdtclient_config:/data/db
-      - "/mnt/downloads:/data/downloads"
-      - "/mnt/downloads/movies:/movies"
-      - "/mnt/downloads/tvshows:/tv"
+      - ./config/rdtclient:/data/db
+      - "/mnt/downloads/debrid-link:/data"
     restart: unless-stopped
 
   prowlarr:
@@ -26,7 +46,7 @@ services:
     ports:
       - "9696:9696"
     volumes:
-      - prowlarr_config:/config
+      - ./config/prowlarr:/config
     restart: unless-stopped
 
   radarr:
@@ -40,9 +60,8 @@ services:
     ports:
       - "7878:7878"
     volumes:
-      - radarr_config:/config
-      - "/mnt/downloads/movies:/movies"
-      - "/mnt/downloads:/downloads"
+      - ./config/radarr:/config
+      - "/mnt/downloads/debrid-link:/data"
     restart: unless-stopped
 
   sonarr:
@@ -56,9 +75,8 @@ services:
     ports:
       - "8989:8989"
     volumes:
-      - sonarr_config:/config
-      - "/mnt/downloads//tvshows:/tv"
-      - "/mnt/downloads:/downloads"
+      - ./config/sonarr:/config
+      - "/mnt/downloads/debrid-link:/data"
     restart: unless-stopped
 
   overseerr:
@@ -72,7 +90,7 @@ services:
     ports:
       - "5055:5055"
     volumes:
-      - overseerr_config:/config
+      - ./config/overseerr:/config
     restart: unless-stopped
   
   flaresolverr:
@@ -85,9 +103,27 @@ services:
       - "8191:8191"
     restart: unless-stopped
 
-volumes:
-  rdtclient_config:
-  prowlarr_config:
-  radarr_config:
-  sonarr_config:
-  overseerr_config:
+  clubnzb-proxy:
+    build: ./clubnzb-proxy
+    container_name: clubnzb-proxy
+    environment:
+      - TZ=Europe/Brussels
+    ports:
+      - "5080:5080"
+    restart: unless-stopped
+
+  sabnzbd:
+    image: lscr.io/linuxserver/sabnzbd:latest
+    container_name: sabnzbd
+    network_mode: "service:gluetun"
+    depends_on:
+      - gluetun
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Brussels
+      - UMASK=002
+    volumes:
+      - ./config/sabnzbd:/config
+      - "/mnt/downloads/debrid-link:/data"
+    restart: unless-stopped
