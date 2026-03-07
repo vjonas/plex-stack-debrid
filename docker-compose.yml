@@ -13,6 +13,8 @@ services:
       - OPENVPN_USER=${NORD_USER}
       - OPENVPN_PASSWORD=${NORD_PASS}
       - SERVER_COUNTRIES=Belgium
+      - FIREWALL_INPUT_PORTS=6500,8080
+      - FIREWALL_OUTBOUND_SUBNETS=192.168.1.0/24,172.16.0.0/12
     ports:
       - "6500:6500"   # rdtclient
       - "8080:8080"   # sabnzbd
@@ -29,7 +31,7 @@ services:
       - PGID=1000
       - TZ=Europe/Brussels
     volumes:
-      - rdtclient_config:/data/db
+      - ./config/rdtclient:/data/db
       - "/mnt/downloads/debrid-link:/data"
     restart: unless-stopped
 
@@ -44,7 +46,7 @@ services:
     ports:
       - "9696:9696"
     volumes:
-      - prowlarr_config:/config
+      - ./config/prowlarr:/config
     restart: unless-stopped
 
   radarr:
@@ -58,7 +60,7 @@ services:
     ports:
       - "7878:7878"
     volumes:
-      - radarr_config:/config
+      - ./config/radarr:/config
       - "/mnt/downloads/debrid-link:/data"
     restart: unless-stopped
 
@@ -73,7 +75,7 @@ services:
     ports:
       - "8989:8989"
     volumes:
-      - sonarr_config:/config
+      - ./config/sonarr:/config
       - "/mnt/downloads/debrid-link:/data"
     restart: unless-stopped
 
@@ -88,7 +90,7 @@ services:
     ports:
       - "5055:5055"
     volumes:
-      - overseerr_config:/config
+      - ./config/overseerr:/config
     restart: unless-stopped
   
   flaresolverr:
@@ -122,14 +124,6 @@ services:
       - TZ=Europe/Brussels
       - UMASK=002
     volumes:
-      - sabnzbd_config:/config
+      - ./config/sabnzbd:/config
       - "/mnt/downloads/debrid-link:/data"
     restart: unless-stopped
-
-volumes:
-  rdtclient_config:
-  prowlarr_config:
-  radarr_config:
-  sonarr_config:
-  overseerr_config:
-  sabnzbd_config:
