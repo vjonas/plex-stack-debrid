@@ -1,13 +1,33 @@
 services:
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    container_name: gluetun
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      - TZ=Europe/Brussels
+      - VPN_SERVICE_PROVIDER=nordvpn
+      - VPN_TYPE=openvpn
+      - OPENVPN_USER=${NORD_USER}
+      - OPENVPN_PASSWORD=${NORD_PASS}
+      - SERVER_COUNTRIES=Belgium
+    ports:
+      - "6500:6500"   # rdtclient
+      - "8080:8080"   # sabnzbd
+    restart: unless-stopped
+
   rdtclient:
     image: rogerfar/rdtclient:latest
     container_name: rdtclient
+    network_mode: "service:gluetun"
+    depends_on:
+      - gluetun
     environment:
       - PUID=1000
       - PGID=1000
       - TZ=Europe/Brussels
-    ports:
-      - "6500:6500"
     volumes:
       - rdtclient_config:/data/db
       - "/mnt/downloads/debrid-link:/data"
@@ -93,13 +113,14 @@ services:
   sabnzbd:
     image: lscr.io/linuxserver/sabnzbd:latest
     container_name: sabnzbd
+    network_mode: "service:gluetun"
+    depends_on:
+      - gluetun
     environment:
       - PUID=1000
       - PGID=1000
       - TZ=Europe/Brussels
       - UMASK=002
-    ports:
-      - "8080:8080"
     volumes:
       - sabnzbd_config:/config
       - "/mnt/downloads/debrid-link:/data"
