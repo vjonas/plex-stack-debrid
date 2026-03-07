@@ -1,2 +1,4 @@
 .env
+api-keys.md
 config/
+backups/
