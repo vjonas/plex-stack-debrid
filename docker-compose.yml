@@ -12,6 +12,10 @@ services:
       - VPN_TYPE=openvpn
       - OPENVPN_USER=${NORD_USER}
       - OPENVPN_PASSWORD=${NORD_PASS}
+      # Nord sometimes rejects one server with AUTH_FAILED. Gluetun's default
+      # auth-retry nointeract then retries that same server forever, so the
+      # healthcheck never runs. Exit instead and let Gluetun pick the next server.
+      - OPENVPN_FLAGS=--auth-retry none
       - SERVER_COUNTRIES=Belgium
       - FIREWALL_INPUT_PORTS=6500,8080
       - FIREWALL_OUTBOUND_SUBNETS=192.168.1.0/24,172.16.0.0/12
@@ -110,6 +114,15 @@ services:
       - TZ=Europe/Brussels
     ports:
       - "5080:5080"
+    restart: unless-stopped
+
+  nzbking-proxy:
+    build: ./nzbking-proxy
+    container_name: nzbking-proxy
+    environment:
+      - TZ=Europe/Brussels
+    ports:
+      - "5081:5081"
     restart: unless-stopped
 
   sabnzbd:

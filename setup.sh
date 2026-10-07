@@ -221,6 +221,45 @@ curl -s -X POST "http://localhost:9696/api/v1/indexer" \
         "appProfileId": 1,
         "fields": [{"name": "definitionFile", "value": "1337x"}]
     }' > /dev/null 2>&1 || true
+
+echo "  Adding usenet proxy indexers (ClubNZB, NZBKing)..."
+# These are local Newznab proxy containers (clubnzb-proxy:5080, nzbking-proxy:5081).
+# apiKey is required by the Newznab contract but ignored by the proxies.
+curl -s -X POST "http://localhost:9696/api/v1/indexer" \
+    -H "X-Api-Key: $PROWLARR_API" \
+    -H "Content-Type: application/json" \
+    -d '{
+        "name": "ClubNZB",
+        "implementation": "Newznab",
+        "configContract": "NewznabSettings",
+        "enable": true,
+        "protocol": "usenet",
+        "priority": 25,
+        "appProfileId": 1,
+        "fields": [
+            {"name": "baseUrl", "value": "http://clubnzb-proxy:5080"},
+            {"name": "apiPath", "value": "/api"},
+            {"name": "apiKey", "value": "clubnzb"}
+        ]
+    }' > /dev/null 2>&1 || true
+
+curl -s -X POST "http://localhost:9696/api/v1/indexer" \
+    -H "X-Api-Key: $PROWLARR_API" \
+    -H "Content-Type: application/json" \
+    -d '{
+        "name": "NZBKing",
+        "implementation": "Newznab",
+        "configContract": "NewznabSettings",
+        "enable": true,
+        "protocol": "usenet",
+        "priority": 25,
+        "appProfileId": 1,
+        "fields": [
+            {"name": "baseUrl", "value": "http://nzbking-proxy:5081"},
+            {"name": "apiPath", "value": "/api"},
+            {"name": "apiKey", "value": "nzbking"}
+        ]
+    }' > /dev/null 2>&1 || true
 echo "  Done!"
 
 echo ""

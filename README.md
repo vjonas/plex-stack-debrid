@@ -28,6 +28,7 @@ Phone -> Overseerr -> Radarr/Sonarr -> Prowlarr (indexers)
 - **RDTClient** emulates a qBittorrent API, downloads via Debrid-Link
 - **SABnzbd** downloads from Usenet providers
 - **ClubNZB Proxy** proxies NZB requests for ClubNZB indexer
+- **NZBKing Proxy** proxies NZB requests for nzbking.com indexer
 - **Prowlarr** manages indexers and syncs them to Radarr/Sonarr
 - **FlareSolverr** solves Cloudflare challenges for indexers
 
@@ -118,6 +119,7 @@ This configures root folders, remote path mappings, Prowlarr integrations, and i
 | SABnzbd | Usenet download client | http://your-server:8080 |
 | FlareSolverr | Cloudflare solver for indexers | http://your-server:8191 |
 | ClubNZB Proxy | NZB proxy for ClubNZB | http://your-server:5080 |
+| NZBKing Proxy | NZB proxy for nzbking.com | http://your-server:5081 |
 
 ---
 
@@ -164,6 +166,11 @@ This configures root folders, remote path mappings, Prowlarr integrations, and i
    - Radarr Server: `http://radarr:7878`
    - Sonarr Server: `http://sonarr:8989`
 3. **Indexers**: Add your preferred indexers (1337x, EZTV, ThePirateBay, etc.)
+4. **Usenet proxy indexers** (ClubNZB, NZBKing): add each as a **Generic Newznab** indexer:
+   - ClubNZB URL: `http://clubnzb-proxy:5080`, API Path `/api`
+   - NZBKing URL: `http://nzbking-proxy:5081`, API Path `/api`
+   - API Key: any non-empty value (the proxies ignore it)
+   - **Tag**: if the Radarr/Sonarr apps are tag-filtered (this stack uses the `flaresolverr` tag), give these indexers that same tag or Prowlarr will not sync them to Radarr/Sonarr. Apps with no tags sync all indexers.
 
 ### SABnzbd Setup
 
@@ -206,6 +213,7 @@ plex-prowlr-sonar-etc-stack/
 ├── setup.sh                  # Automated first-time setup
 ├── cmd.sh                    # SMB fstab helper script
 ├── clubnzb-proxy/            # ClubNZB proxy app (Dockerfile + app.py)
+├── nzbking-proxy/            # NZBKing proxy app (Dockerfile + app.py)
 ├── portainer/                # Portainer compose (optional, separate stack)
 └── config/                   # Persistent container configs (gitignored)
     ├── prowlarr/
